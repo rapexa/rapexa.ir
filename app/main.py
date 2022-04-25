@@ -1,5 +1,6 @@
 from __future__ import barry_as_FLUFL
 import email
+from datetime import timedelta
 import config
 import MySQLdb
 from flask import Flask , render_template,request , redirect,jsonify, flash, url_for, Response, session
@@ -11,7 +12,8 @@ app = Flask(__name__)
 
 # config
 app.config.update(
-    SECRET_KEY = config.secret_key
+    SECRET_KEY = config.secret_key,
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=5)
 )
 
 limiter = Limiter(
@@ -22,7 +24,7 @@ limiter = Limiter(
 # flask-login
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = "login"
+login_manager.login_view = "admin"
 
 
 # silly user model
@@ -82,56 +84,50 @@ def index():
 @limiter.limit("10 per minute")
 def signup(): 
     '''main page'''
-    if current_user.is_authenticated:
-        return redirect("/")
     if request.method == 'POST':
         name = request.form["name"]
         email = request.form["email"]
         phone = request.form["phone"]
         password = request.form["password"]
         write_user_to_database(name,email,phone,password)
-        login_user(user)
         return redirect('/')
     
     return render_template('sign_up.html')
 
-@app.route('/sign_in',methods=["GET", "POST"])
+@app.route('/97E0848778679DE516AEFF12986FF261CCEF0D692397B45017DDD62D492FCC64',methods=["GET", "POST"])
 @limiter.limit("10 per minute")
-def login():
-    '''this function return login page'''
+def admin(): 
+    '''admin page'''
+    session.permanent = True
     error = None
-    if current_user.is_authenticated:
-        return redirect("/")
+    
     if request.method == 'POST':
         username = request.form["username"]
         password = request.form["Password"]
         if check_admin(username,password):
-            login_user(user)
-            return redirect(url_for('admin'))
-        elif check_user(username,password):
-            login_user(user)
-            return redirect("/")
+            #login_user(user)
+            all_messages = reading_msg_from_database()
+            messages = []
+            for message in all_messages:
+                name , email, phone, title , message = message
+                messages.append({"name":name,"email":email,"phone":phone,"title":title,"message":message})
+            
+            all_users = reading_usr_from_database()
+            users = []
+            for user in all_users:
+                usr_name, usr_email, usr_phone, password = user
+                users.append({"name":usr_name,"email":usr_email,"phone":usr_phone,"password":password})
+            
+            return render_template('dashboard.html', data = {"messages" : messages,"users" : users})
+        
         else:
-            error = '!!!invalid user!!!' 
-               
+            error = '!!!invalid user!!!'
+        
+    if current_user.is_authenticated:
+        return redirect("/97E0848778679DE516AEFF12986FF261CCEF0D692397B45017DDD62D492FCC64") 
+            
     return render_template('sign_in.html', error=error)
-
-@app.route('/97E0848778679DE516AEFF12986FF261CCEF0D692397B45017DDD62D492FCC64')
-def admin(): 
-    '''main page'''
-    all_messages = reading_msg_from_database()
-    messages = []
-    for message in all_messages:
-        name , email, phone, title , message = message
-        messages.append({"name":name,"email":email,"phone":phone,"title":title,"message":message})
     
-    all_users = reading_usr_from_database()
-    users = []
-    for user in all_users:
-        usr_name, usr_email, usr_phone, password = user
-        users.append({"name":usr_name,"email":usr_email,"phone":usr_phone,"password":password})
-    
-    return render_template('dashboard.html', data = {"messages" : messages,"users" : users})
 
 def check_admin(username,password):
     res = False
